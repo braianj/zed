@@ -602,15 +602,11 @@ impl ConfigureContextServerModal {
     }
 
     fn confirm(&mut self, _: &menu::Confirm, cx: &mut Context<Self>) {
-        if matches!(
-            self.state,
-            State::Waiting
-                | State::AuthRequired { .. }
-                | State::ClientSecretRequired { .. }
-                | State::Authenticating { .. }
-        ) {
+        if matches!(self.state, State::Waiting | State::Authenticating { .. }) {
             return;
         }
+
+        self._auth_subscription = None;
 
         self.state = State::Idle;
         let Some(workspace) = self.workspace.upgrade() else {
@@ -627,7 +623,7 @@ impl ConfigureContextServerModal {
 
         self.state = State::Waiting;
 
-        let existing_server = self.context_server_store.read(cx).get_running_server(&id);
+        let existing_server = self.context_server_store.read(cx).get_server(&id);
         if existing_server.is_some() {
             self.context_server_store.update(cx, |store, cx| {
                 store.stop_server(&id, cx).log_err();
@@ -691,6 +687,15 @@ impl ConfigureContextServerModal {
 
     fn cancel(&mut self, _: &menu::Cancel, cx: &mut Context<Self>) {
         cx.emit(DismissEvent);
+    }
+
+    fn cancel_authentication(&mut self, server_id: &ContextServerId, cx: &mut Context<Self>) {
+        self._auth_subscription = None;
+        self.context_server_store.update(cx, |store, cx| {
+            store.stop_server(server_id, cx).log_err();
+        });
+        self.state = State::Idle;
+        cx.notify();
     }
 
     fn authenticate(&mut self, server_id: ContextServerId, cx: &mut Context<Self>) {
@@ -981,13 +986,7 @@ impl ConfigureContextServerModal {
 
     fn render_modal_footer(&self, cx: &mut Context<Self>) -> ModalFooter {
         let focus_handle = self.focus_handle(cx);
-        let is_busy = matches!(
-            self.state,
-            State::Waiting
-                | State::AuthRequired { .. }
-                | State::ClientSecretRequired { .. }
-                | State::Authenticating { .. }
-        );
+        let is_busy = matches!(self.state, State::Waiting | State::Authenticating { .. });
 
         ModalFooter::new()
             .start_slot::<Button>(
@@ -1153,6 +1152,12 @@ impl ConfigureContextServerModal {
                 h_flex()
                     .w_full()
                     .gap_2()
+                    .capture_action({
+                        let server_id = server_id.clone();
+                        cx.listener(move |this, _: &editor::actions::Newline, _window, cx| {
+                            this.submit_client_secret(server_id.clone(), cx);
+                        })
+                    })
                     .child(div().flex_1().child(EditorElement::new(
                         &self.secret_editor,
                         EditorStyle {
@@ -1174,6 +1179,39 @@ impl ConfigureContextServerModal {
                                 })
                             }),
                     ),
+            )
+    }
+
+    fn render_authenticating(&self, server_id: &ContextServerId, cx: &mut Context<Self>) -> Div {
+        h_flex()
+            .h_8()
+            .gap_2()
+            .justify_center()
+            .child(
+                h_flex()
+                    .gap_1p5()
+                    .child(
+                        Icon::new(IconName::LoadCircle)
+                            .size(IconSize::XSmall)
+                            .color(Color::Muted)
+                            .with_rotate_animation(3),
+                    )
+                    .child(
+                        Label::new("Authenticating…")
+                            .size(LabelSize::Small)
+                            .color(Color::Muted),
+                    ),
+            )
+            .child(
+                Button::new("cancel-authentication", "Cancel")
+                    .style(ButtonStyle::Outlined)
+                    .label_size(LabelSize::Small)
+                    .on_click({
+                        let server_id = server_id.clone();
+                        cx.listener(move |this, _event, _window, cx| {
+                            this.cancel_authentication(&server_id, cx);
+                        })
+                    }),
             )
     }
 
@@ -1241,8 +1279,8 @@ impl Render for ConfigureContextServerModal {
                                                     &server_id.clone(),
                                                     cx,
                                                 ),
-                                            State::Authenticating { .. } => {
-                                                self.render_loading("Authenticating…")
+                                            State::Authenticating { _server_id } => {
+                                                self.render_authenticating(&_server_id.clone(), cx)
                                             }
                                             State::Error(error) => {
                                                 Self::render_modal_error(error.clone())

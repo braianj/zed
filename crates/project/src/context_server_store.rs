@@ -1061,10 +1061,10 @@ impl ContextServerStore {
                             this.update(cx, |this, cx| {
                                 this.update_server_state(
                                     id.clone(),
-                                    ContextServerState::AuthRequired {
+                                    ContextServerState::Error {
                                         server,
                                         configuration,
-                                        discovery,
+                                        error: format!("{err:#}").into(),
                                     },
                                     cx,
                                 )
@@ -1119,10 +1119,10 @@ impl ContextServerStore {
                         this.update(cx, |this, cx| {
                             this.update_server_state(
                                 id.clone(),
-                                ContextServerState::AuthRequired {
+                                ContextServerState::Error {
                                     server,
                                     configuration,
-                                    discovery,
+                                    error: format!("{err:#}").into(),
                                 },
                                 cx,
                             )
@@ -1205,10 +1205,10 @@ impl ContextServerStore {
                     this.update(cx, |this, cx| {
                         this.update_server_state(
                             id.clone(),
-                            ContextServerState::AuthRequired {
+                            ContextServerState::Error {
                                 server,
                                 configuration,
-                                discovery,
+                                error: format!("{err:#}").into(),
                             },
                             cx,
                         )

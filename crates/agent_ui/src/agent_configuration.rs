@@ -931,8 +931,6 @@ impl AgentConfiguration {
                             .label_size(LabelSize::Small)
                             .on_click({
                                 let context_server_id = context_server_id.clone();
-                                let language_registry = language_registry.clone();
-                                let workspace = workspace.clone();
                                 move |_event, window, cx| {
                                     ConfigureContextServerModal::show_modal_for_existing_server(
                                         context_server_id.clone(),
